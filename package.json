@@ -1,0 +1,24 @@
+{
+  "name": "exchange-rate",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "run": "node app.js",
+    "start": "node app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "chalk": "^3.0.0",
+    "connect-redis": "^4.0.3",
+    "express": "^4.17.1",
+    "express-session": "^1.17.0",
+    "log4js": "^6.1.0",
+    "mysql": "^2.17.1",
+    "redis": "^2.8.0",
+    "request": "^2.88.0",
+    "urlencode": "^1.1.0"
+  }
+}
