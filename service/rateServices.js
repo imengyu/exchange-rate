@@ -17,7 +17,7 @@ module.exports = {
       }else {
         var lastTime = parseFloat(data);
         if(req.query.forceRequest == '20200516' || isNaN(lastTime) 
-          || new Date().getTime() - lastTime > 3600) this.requestRatesAndReturn(res);
+          || (new Date().getTime() - lastTime) / 1000 > 3600) this.requestRatesAndReturn(res);
         else this.getRatesTempAndReturn(res);
       }
     });
@@ -35,10 +35,17 @@ module.exports = {
    * @param {Response} res 返回
    */
   getRatesTempAndReturn(res) {
-    if(!redis.getClient().GET('ratesTemp', (err, data) => {
-      if(err) common.sendFailed(res, '失败，读取缓存错误', err);
+    redis.getClient().GET('ratesTemp', (err, data) => {
+      if(err) {
+        logger.error('失败，读取缓存错误' + e);
+        common.sendFailed(res, '失败，读取缓存错误', err);
+      }
+      else if(data == null) {
+        logger.warn('ratesTemp 为空，重新请求');
+        doRequestRates(res, (data) => common.sendSuccess(res, '成功', data))
+      }
       else common.sendSuccess(res, '成功', JSON.parse(data));
-    })) common.sendFailed(res, '失败，读取缓存错误');
+    })
   },
 
 }
@@ -52,6 +59,7 @@ var body = '';
  * @param {(data)=>void} callback 请求回调
  */
 function doRequestRates(tres, callback) {
+  body = '';
   var req = http.request('http://ali-waihui.showapi.com/waihui-list', { 
     method: 'GET',
     headers: {
@@ -62,8 +70,11 @@ function doRequestRates(tres, callback) {
       res
         .on('data', (data) => body += data)
         .on('end', () => solveRates(tres, body, callback));  
-    }else common.sendFailed(tres, '请求汇率数据失败：' + res.statusCode)
-  }).on('error', (e) => common.sendFailed(tres, '请求汇率数据失败：' + e.message));
+    }
+  }).on('error', (e) => {
+    logger.error('请求汇率数据失败：' + e);
+    common.sendFailed(tres, '请求汇率数据失败：' + e.message)
+  });
   req.end();
 }
 /**
@@ -73,16 +84,22 @@ function doRequestRates(tres, callback) {
  */
 function solveRates(res, body, callback) {
   var targetData = [];
-  var data = JSON.parse(body);
-  var list = data.showapi_res_body.list;
-  list.forEach(element => {
-    var newData = {
-      name: element.name,
-      code: element.code,
-      base: element.hui_in / 100,
-    }
-    targetData.push(newData);
-  });
-  redis.getClient().SET('lastUpdateTime', new Date().getTime().toString());
-  callback(targetData);
+  try {
+    var data = JSON.parse(body);
+    var list = data.showapi_res_body.list;
+    list.forEach(element => {
+      var newData = {
+        name: element.name,
+        code: element.code,
+        base: element.hui_in / 100,
+      }
+      targetData.push(newData);
+    });
+    redis.getClient().SET('lastUpdateTime', new Date().getTime().toString());
+    redis.getClient().SET('ratesTemp', JSON.stringify(targetData));
+    callback(targetData);
+  }catch(e) {
+    logger.error('处理汇率数据失败：' + e.message + ' body: ' + body)
+    common.sendFailed(res, '处理汇率数据失败：' + e.message)
+  }
 }
